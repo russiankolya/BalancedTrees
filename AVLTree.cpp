@@ -101,3 +101,69 @@ void AVLTree<T>::Insert(const T &value) {
     }
     root_ = InsertUtility<T>(root_, value);
 }
+
+template <typename T>
+NodePtr<T> FindMinValueNode(NodePtr<T> node) {
+    while (node->left != nullptr) {
+        node = node->left;
+    }
+    return node;
+}
+
+template <typename T>
+NodePtr<T> RemoveUtility(NodePtr<T> current, const T& value) {
+    if (current == nullptr) {
+        return nullptr;
+    }
+    if (value < current->key) {
+        current->left = RemoveUtility(current->left, value);
+    } else if (value > current->key) {
+        current->right = RemoveUtility(current->right, value);
+    } else {
+        if (current->right == nullptr || current->left == nullptr) {
+            NodePtr<T> temp;
+            if (current->right == nullptr) {
+                temp = current->left;
+            } else {
+                temp = current->right;
+            }
+            if (temp == nullptr) {
+                temp = current;
+                current = nullptr;
+            } else {
+                *current = std::move(*temp);
+            }
+            delete temp;
+        } else {
+            NodePtr<T> temp = FindMinValueNode<T>(current->right);
+            current->key = temp->key;
+            current->right = RemoveUtility(current->right, temp->key);
+        }
+    }
+    if (current == nullptr) {
+        return nullptr;
+    }
+
+    UpdateHeight<T>(current);
+    int balance = GetBalance<T>(current);
+    if (balance > 1 && GetBalance<T>(current->left) >= 0) {
+        return RotateRight<T>(current);
+    }
+    if (balance < -1 && GetBalance<T>(current->right) <= 0) {
+        return RotateLeft<T>(current);
+    }
+    if (balance > 1 && GetBalance<T>(current->left) <= 0) {
+        current->left = RotateLeft<T>(current->left);
+        return RotateRight<T>(current);
+    }
+    if (balance < -1 && GetBalance<T>(current->right) >= 0) {
+        current->right = RotateRight<T>(current->right);
+        return RotateLeft<T>(current);
+    }
+    return current;
+}
+
+template <typename T>
+void AVLTree<T>::Remove(const T &value) {
+    root_ = RemoveUtility(root_, value);
+}

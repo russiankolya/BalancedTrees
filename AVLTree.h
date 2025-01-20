@@ -6,6 +6,7 @@ template <typename T>
 class AVLTree final : public IBinarySearchTree<T> {
 public:
     void Insert(const T &value) override;
+    void Remove(const T &value) override;
 
     struct Node {
         T key;
