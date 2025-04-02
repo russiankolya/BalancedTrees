@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Tree Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Binary Tree Visualizer</h1>
+        
+        <div class="content-container">
+            <div class="tree-visualization" id="tree-visualization">
+                <p>Select a tree to visualize it</p>
+            </div>
+            
+            <div class="panels-container">
+                <div class="panel create-tree-panel">
+                    <h2>Create New Tree</h2>
+                    <select id="tree-type">
+                        <option value="avl">AVL Tree</option>
+                        <option value="bb_alpha">BB Alpha Tree</option>
+                        <option value="red_black">Red Black Tree</option>
+                        <option value="scapegoat">Scapegoat Tree</option>
+                        <option value="splay">Splay Tree</option>
+                    </select>
+                    <button id="create-tree-btn">Create Tree</button>
+                </div>
+                
+                <div class="panel tree-list-panel">
+                    <h2>Your Trees</h2>
+                    <div id="tree-list"></div>
+                </div>
+                
+                <div class="panel active-tree-panel" id="active-tree-panel">
+                    <h2>Selected Tree: <span id="tree-id">None</span></h2>
+                    <div class="tree-actions">
+                        <div class="action-group">
+                            <input type="number" id="node-value" placeholder="Enter value">
+                            <button id="insert-btn">Insert</button>
+                            <button id="remove-btn">Remove</button>
+                        </div>
+                        <button id="delete-tree-btn" class="danger">Delete Tree</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
