@@ -1,14 +1,9 @@
 #include <iostream>
 #include <numeric>
-#include <stdexcept>
 #include <vector>
 #include <chrono>
 #include <random>
 #include <algorithm>
-#include <memory>
-#include <unordered_set>
-#include <string>
-#include <set>
 
 #include "trees/avl_tree.hpp"
 #include "trees/bb_alpha_tree.hpp"
@@ -64,14 +59,14 @@ void runOperations(const std::vector<int>& preliminaryValues, const std::vector<
     std::cout << "BB-alpha Tree: " << measureOperationsTime<BBAlphaTree>(preliminaryValues, operations) << "\n";
     std::cout << "Red Black Tree: " << measureOperationsTime<RedBlackTree>(preliminaryValues, operations) << "\n";
     std::cout << "Scapegoat Tree: " << measureOperationsTime<ScapegoatTree>(preliminaryValues, operations) << "\n";
-    std::cout << "Splay Tree: " << measureOperationsTime<SplayTree>(preliminaryValues, operations) << "\n";
+    std::cout << "Splay Tree: " << measureOperationsTime<SplayTree>(preliminaryValues, operations) << "\n\n";
 }
 
 int main() {
     std::mt19937 gen;
 
 
-    { // Search only scenario
+    {
         const int N = 1'000'000, Q = 10'000'000;
         std::vector<int> data(2 * N);
         std::iota(data.begin(), data.end(), 1);
@@ -87,10 +82,39 @@ int main() {
             operations.push_back({dis(gen), SEARCH});
         }
 
+        std::cout << "Search only with uniformly distributed queries\n";
         runOperations(preliminaryValues, operations);
     }
 
-    { // Hot keys search only scenario
+    {
+        const int N = 1'000'000, Q = 10'000'000;
+        std::vector<int> data(2 * N);
+        std::iota(data.begin(), data.end(), 1);
+        std::shuffle(data.begin(), data.end(), gen);
+
+        std::vector<int> preliminaryValues(data.begin(), data.begin() + N);
+
+        const int HOT_KEYS_COUNT = 0.01 * N;
+        std::vector<int> hotKeys(preliminaryValues.begin(), preliminaryValues.begin() + HOT_KEYS_COUNT);
+        
+        std::vector<Operation> operations;
+        
+        std::uniform_int_distribution<int> hotKeysDis(0, HOT_KEYS_COUNT - 1);
+        for (int i = 0; i < Q * 0.99; i++) {
+            int hotKeyIndex = hotKeysDis(gen);
+            operations.push_back({hotKeys[hotKeyIndex], SEARCH});
+        }
+        
+        std::uniform_int_distribution<int> anyKeyDis(1, 2 * N);
+        for (int i = 0; i < Q * 0.01; i++) {
+            operations.push_back({anyKeyDis(gen), SEARCH});
+        }
+                
+        std::cout << "Search only with hot keys:\n";
+        runOperations(preliminaryValues, operations);
+    }
+
+    {
         const int N = 1'000'000, Q = 10'000'000;
         std::vector<int> data(2 * N);
         std::iota(data.begin(), data.end(), 1);
@@ -98,10 +122,7 @@ int main() {
 
         std::vector<int> preliminaryValues(data.begin(), data.begin() + N);
         
-
-
         const int HOT_KEYS_COUNT = 0.01 * N;
-        // std::shuffle(preliminaryValues.begin(), preliminaryValues.end(), gen);
         std::vector<int> hotKeys(preliminaryValues.begin(), preliminaryValues.begin() + HOT_KEYS_COUNT);
         
         std::vector<Operation> operations;
@@ -117,11 +138,73 @@ int main() {
             operations.push_back({anyKeyDis(gen), SEARCH});
         }
         
-        std::shuffle(operations.begin(), operations.end(), gen);
+        std::sort(operations.begin(), operations.end(), [](Operation l, Operation r) { return l.value < r.value; });
         
-        std::cout << "\nHot keys search only scenario:\n";
+        std::cout << "Search only with hot keys and sorted queries:\n";
         runOperations(preliminaryValues, operations);
     }
+
+    {
+        const int N = 1'000'000, Q = 10'000'000;
+        std::vector<int> data(2 * N);
+        std::iota(data.begin(), data.end(), 1);
+        std::shuffle(data.begin(), data.end(), gen);
+    
+        std::vector<int> preliminaryValues(data.begin(), data.begin() + N);
+        
+        std::vector<int> availableForInsert(data.begin() + N, data.end());
+        std::vector<int> availableForDelete(preliminaryValues);
+        
+        std::vector<Operation> operations;
+        
+        std::uniform_int_distribution<int> operationDis(0, 2);
+                std::uniform_int_distribution<int> valueDis(1, 2 * N);
+        
+        for (int i = 0; i < Q; i++) {
+            int op = operationDis(gen);
+            
+            if (op == 0) {
+                if (!availableForInsert.empty()) {
+                    std::uniform_int_distribution<int> insertDis(0, availableForInsert.size() - 1);
+                    int index = insertDis(gen);
+                    int value = availableForInsert[index];
+                    
+                    std::swap(availableForInsert[index], availableForInsert.back());
+                    availableForInsert.pop_back();
+                    availableForDelete.push_back(value);
+                    
+                    operations.push_back({value, INSERT});
+                }
+                else {
+                    operations.push_back({valueDis(gen), SEARCH});
+                }
+            }
+            else if (op == 1) {
+                int value = valueDis(gen);
+                operations.push_back({value, SEARCH});
+            }
+            else {
+                if (!availableForDelete.empty()) {
+                    std::uniform_int_distribution<int> deleteDis(0, availableForDelete.size() - 1);
+                    int index = deleteDis(gen);
+                    int value = availableForDelete[index];
+                    
+                    std::swap(availableForDelete[index], availableForDelete.back());
+                    availableForDelete.pop_back();
+                    availableForInsert.push_back(value);
+                    
+                    operations.push_back({value, REMOVE});
+                }
+                else {
+                    operations.push_back({valueDis(gen), SEARCH});
+                }
+            }
+        }
+        
+        std::cout << "Mixed operations with uniform distribution:\n";
+        runOperations(preliminaryValues, operations);
+    }
+    
 
     return 0;
 }
