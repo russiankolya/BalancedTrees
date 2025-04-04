@@ -1,4 +1,6 @@
 #include <iostream>
+#include <numeric>
+#include <stdexcept>
 #include <vector>
 #include <chrono>
 #include <random>
@@ -6,7 +8,6 @@
 #include <memory>
 #include <unordered_set>
 #include <string>
-#include <iomanip>
 #include <set>
 
 #include "trees/avl_tree.hpp"
@@ -15,258 +16,112 @@
 #include "trees/scapegoat_tree.hpp"
 #include "trees/splay_tree.hpp"
 
-class DataGenerator {
-public:
-    static std::mt19937 gen;
-
-    static void seed(unsigned value) { gen.seed(value); }
-
-    static std::vector<int> generateUniqueData(size_t size, int min, int max) {
-        std::unordered_set<int> uniqueValues;
-        std::uniform_int_distribution<int> dist(min, max);
-        
-        while (uniqueValues.size() < size) {
-            int value = dist(gen);
-            if (uniqueValues.insert(value).second) {
-                if (uniqueValues.size() >= size) break;
-            }
-        }
-        
-        std::vector<int> result(uniqueValues.begin(), uniqueValues.end());
-        std::shuffle(result.begin(), result.end(), gen);
-        return result;
-    }
-
-    static std::vector<int> generateHotKeysQueries(const std::vector<int>& data, size_t queriesCount) {
-        std::vector<int> queries;
-        queries.reserve(queriesCount);
-        
-        const size_t hotKeysCount = std::max(size_t(1), data.size()/100);
-        std::vector<int> hotKeys;
-        hotKeys.reserve(hotKeysCount);
-        
-        std::sample(data.begin(), data.end(), std::back_inserter(hotKeys), 
-                   hotKeysCount, gen);
-        
-        std::bernoulli_distribution hotDist(0.99);
-        std::uniform_int_distribution<size_t> hotIndex(0, hotKeysCount-1);
-        std::uniform_int_distribution<size_t> dataIndex(0, data.size()-1);
-
-        for (size_t i = 0; i < queriesCount; ++i) {
-            queries.push_back(hotDist(gen) ? hotKeys[hotIndex(gen)] : data[dataIndex(gen)]);
-        }
-        
-        return queries;
-    }
-
-    static std::vector<int> generateUniformQueries(const std::vector<int>& data, size_t queriesCount) {
-        std::vector<int> queries(queriesCount);
-        std::uniform_int_distribution<size_t> dist(0, data.size()-1);
-        std::generate(queries.begin(), queries.end(), [&]() { return data[dist(gen)]; });
-        return queries;
-    }
+enum EType {
+    INSERT,
+    REMOVE,
+    SEARCH
 };
-
-std::mt19937 DataGenerator::gen(std::random_device{}());
 
 struct Operation {
-    enum Type { INSERT, SEARCH, REMOVE };
-    Type type;
     int value;
+    EType type;
 };
 
-class Benchmark {
-private:
-    struct Result {
-        std::string treeName;
-        std::string scenarioName;
-        size_t dataSize;
-        long long executionTime;
-    };
+template<template<typename> class TTreeType>
+uint64_t measureOperationsTime(const std::vector<int>& preliminaryValues, const std::vector<Operation>& operations) {
+    TTreeType<int> tree;
 
-    std::vector<Result> results;
+    for (const auto value : preliminaryValues) {
+        tree.insert(value);
+    }
     
-    enum ScenarioType {
-        SEARCH_UNIFORM,
-        SEARCH_HOTKEYS,
-        BALANCED_OPS,
-        SEARCH_HEAVY
-    };
-
-    template<typename Tree>
-    void testScenario(const std::vector<Operation>& operations, 
-                     const std::string& scenarioName, 
-                     size_t dataSize) {
-        Tree tree;
-        std::unordered_set<int> presentValues;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (const auto& op : operations) {
+        int value = op.value;
+        EType type = op.type;
         
-        if constexpr (std::is_same_v<Tree, SplayTree<int>>) {
-            const int WARMUP_ITERATIONS = 3;
-            for (int i = 0; i < WARMUP_ITERATIONS; ++i) {
-                for (const auto& op : operations) {
-                    if (op.type == Operation::SEARCH) {
-                        tree.search(op.value);
-                    }
-                }
-            }
-        }
-
-        auto start = std::chrono::high_resolution_clock::now();
-        
-        for (const auto& op : operations) {
-            switch(op.type) {
-                case Operation::INSERT:
-                    if (presentValues.insert(op.value).second) {
-                        tree.insert(op.value);
-                    }
-                    break;
-                case Operation::SEARCH: {
-                    volatile bool found = tree.search(op.value);
-                    (void)found;
-                    break;
-                }
-                case Operation::REMOVE:
-                    if (presentValues.erase(op.value)) {
-                        tree.remove(op.value);
-                    }
-                    break;
-            }
-        }
-        
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now() - start).count();
-        
-        results.emplace_back(Result{Tree::name(), scenarioName, dataSize, duration});
-    }
-
-    std::vector<Operation> generateOperations(ScenarioType type, 
-                                             const std::vector<int>& data,
-                                             size_t opsCount) {
-        std::vector<Operation> operations;
-        operations.reserve(opsCount);
-        
-        std::unordered_set<int> available(data.begin(), data.end());
-        std::vector<int> hotKeys;
-        std::mt19937& gen = DataGenerator::gen;
-        
-        if (type == SEARCH_HOTKEYS) {
-            size_t hotCount = std::max(1ul, data.size()/100);
-            std::sample(data.begin(), data.end(), std::back_inserter(hotKeys),
-                       hotCount, gen);
-        }
-
-        std::uniform_int_distribution<size_t> dist(0, data.size()-1);
-        std::uniform_real_distribution<double> prob(0.0, 1.0);
-
-        for (size_t i = 0; i < opsCount; ++i) {
-            Operation op;
-            
-            switch(type) {
-                case SEARCH_UNIFORM:
-                    op = {Operation::SEARCH, data[dist(gen)]};
-                    break;
-                    
-                case SEARCH_HOTKEYS: {
-                    std::bernoulli_distribution hot(0.99);
-                    op.value = hot(gen) ? hotKeys[dist(gen) % hotKeys.size()] 
-                                      : data[dist(gen)];
-                    op.type = Operation::SEARCH;
-                    break;
-                }
-                
-                case BALANCED_OPS: {
-                    double p = prob(gen);
-                    if (p < 0.33 && !available.empty()) {
-                        auto it = available.begin();
-                        std::advance(it, dist(gen) % available.size());
-                        op = {Operation::REMOVE, *it};
-                        available.erase(it);
-                    } else if (p < 0.66) {
-                        int val = *std::max_element(data.begin(), data.end()) + i + 1;
-                        available.insert(val);
-                        op = {Operation::INSERT, val};
-                    } else {
-                        op = {Operation::SEARCH, data[dist(gen)]};
-                    }
-                    break;
-                }
-                
-                case SEARCH_HEAVY: {
-                    double p = prob(gen);
-                    if (p < 0.8) {
-                        op = {Operation::SEARCH, data[dist(gen)]};
-                    } else if (p < 0.95 && !available.empty()) {
-                        auto it = available.begin();
-                        std::advance(it, dist(gen) % available.size());
-                        op = {Operation::REMOVE, *it};
-                        available.erase(it);
-                    } else {
-                        int val = *std::max_element(data.begin(), data.end()) + i + 1;
-                        available.insert(val);
-                        op = {Operation::INSERT, val};
-                    }
-                    break;
-                }
-            }
-            
-            operations.push_back(op);
-        }
-        
-        return operations;
-    }
-
-public:
-    void runBenchmarks() {
-        const std::vector<size_t> sizes = {1000, 10000, 100000};
-        const std::vector<std::pair<ScenarioType, std::string>> scenarios = {
-            {SEARCH_UNIFORM,    "Search Only - Uniform"},
-            {SEARCH_HOTKEYS,    "Search Only - Hot Keys"},
-            {BALANCED_OPS,      "Balanced Operations"},
-            {SEARCH_HEAVY,      "Search Heavy (80/15/5)"}
-        };
-
-        DataGenerator::seed(42);
-
-        for (size_t size : sizes) {
-            std::cout << "Run for size: " << size << "\n";
-            auto data = DataGenerator::generateUniqueData(size, 0, size*2);
-            
-            for (const auto& [scenario, name] : scenarios) {
-                auto operations = generateOperations(scenario, data, size);
-                
-                testScenario<AVLTree<int>>(operations, name, size);
-                testScenario<BBAlphaTree<int>>(operations, name, size);
-                testScenario<RedBlackTree<int>>(operations, name, size);
-                testScenario<ScapegoatTree<int>>(operations, name, size);
-                testScenario<SplayTree<int>>(operations, name, size);
-            }
+        switch (type) {
+            case EType::INSERT:
+                tree.insert(value);
+                break;
+            case EType::REMOVE:
+                tree.remove(value);
+                break;
+            case EType::SEARCH:
+                volatile bool found = tree.search(op.value);
+                (void)found;
+                break;
         }
     }
+    
+    auto end = std::chrono::high_resolution_clock::now();    
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    return duration.count();
+}
 
-    void printResults() const {
-        std::cout << "\nResults:\n";
-        std::cout << std::string(90, '-') << "\n";
-        std::cout << std::left 
-                  << std::setw(20) << "Tree Type"
-                  << std::setw(30) << "Scenario"
-                  << std::setw(15) << "Data Size"
-                  << std::setw(15) << "Time (ms)\n";
-        std::cout << std::string(90, '-') << "\n";
-         
-        for (const auto& res : results) {
-            std::cout << std::left
-                      << std::setw(20) << res.treeName
-                      << std::setw(30) << res.scenarioName
-                      << std::setw(15) << res.dataSize
-                      << std::setw(15) << res.executionTime << "\n";
-        }
-        std::cout << std::string(90, '-') << std::endl;
-    }
-};
+void runOperations(const std::vector<int>& preliminaryValues, const std::vector<Operation>& operations) {
+    std::cout << "AVL Tree: " << measureOperationsTime<AVLTree>(preliminaryValues, operations) << "\n";
+    std::cout << "BB-alpha Tree: " << measureOperationsTime<BBAlphaTree>(preliminaryValues, operations) << "\n";
+    std::cout << "Red Black Tree: " << measureOperationsTime<RedBlackTree>(preliminaryValues, operations) << "\n";
+    std::cout << "Scapegoat Tree: " << measureOperationsTime<ScapegoatTree>(preliminaryValues, operations) << "\n";
+    std::cout << "Splay Tree: " << measureOperationsTime<SplayTree>(preliminaryValues, operations) << "\n";
+}
 
 int main() {
-    Benchmark benchmark;
-    benchmark.runBenchmarks();
-    benchmark.printResults();
+    std::mt19937 gen;
+
+
+    { // Search only scenario
+        const int N = 1'000'000, Q = 10'000'000;
+        std::vector<int> data(2 * N);
+        std::iota(data.begin(), data.end(), 1);
+        std::shuffle(data.begin(), data.end(), gen);
+
+        std::vector<int> preliminaryValues;
+        std::vector<Operation> operations;
+        for (int i = 0; i < N; i++) {
+            preliminaryValues.push_back(data[i]);
+        }
+        std::uniform_int_distribution<int> dis(1, 2 * N);
+        for (int i = 0; i < Q; i++) {
+            operations.push_back({dis(gen), SEARCH});
+        }
+
+        runOperations(preliminaryValues, operations);
+    }
+
+    { // Hot keys search only scenario
+        const int N = 1'000'000, Q = 10'000'000;
+        std::vector<int> data(2 * N);
+        std::iota(data.begin(), data.end(), 1);
+        std::shuffle(data.begin(), data.end(), gen);
+
+        std::vector<int> preliminaryValues(data.begin(), data.begin() + N);
+        
+
+
+        const int HOT_KEYS_COUNT = 0.01 * N;
+        // std::shuffle(preliminaryValues.begin(), preliminaryValues.end(), gen);
+        std::vector<int> hotKeys(preliminaryValues.begin(), preliminaryValues.begin() + HOT_KEYS_COUNT);
+        
+        std::vector<Operation> operations;
+        
+        std::uniform_int_distribution<int> hotKeysDis(0, HOT_KEYS_COUNT - 1);
+        for (int i = 0; i < Q * 0.99; i++) {
+            int hotKeyIndex = hotKeysDis(gen);
+            operations.push_back({hotKeys[hotKeyIndex], SEARCH});
+        }
+        
+        std::uniform_int_distribution<int> anyKeyDis(1, 2 * N);
+        for (int i = 0; i < Q * 0.01; i++) {
+            operations.push_back({anyKeyDis(gen), SEARCH});
+        }
+        
+        std::shuffle(operations.begin(), operations.end(), gen);
+        
+        std::cout << "\nHot keys search only scenario:\n";
+        runOperations(preliminaryValues, operations);
+    }
+
     return 0;
 }

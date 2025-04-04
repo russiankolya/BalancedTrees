@@ -24,6 +24,7 @@ public:
     virtual ~TreeWrapper() = default;
     virtual void insert(int value) = 0;
     virtual void remove(int value) = 0;
+    virtual bool search(int value) = 0;
     virtual json getJson() = 0;
     virtual std::string getType() const = 0;
 };
@@ -43,6 +44,10 @@ public:
     
     void remove(int value) override {
         tree_.remove(value);
+    }
+
+    bool search(int value) override {
+        return tree_.search(value);
     }
     
     json getJson() override {

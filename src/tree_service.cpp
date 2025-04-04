@@ -149,6 +149,41 @@ void setupTreeServer(httplib::Server& server, TreeManager& treeManager) {
             res.set_content(json{{"error", e.what()}}.dump(), "application/json");
         }
     });
+
+    server.Post(R"(/trees/([^/]+)/search)", [&](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string id = req.matches[1];
+            TreeWrapper* tree = treeManager.getTree(id);
+            
+            if (!tree) {
+                res.status = 404;
+                res.set_content(json{{"error", "Tree not found"}}.dump(), "application/json");
+                return;
+            }
+            
+            auto reqJson = json::parse(req.body);
+            
+            if (!reqJson.contains("value")) {
+                res.status = 400;
+                res.set_content(json{{"error", "Value is required"}}.dump(), "application/json");
+                return;
+            }
+            
+            int value = reqJson["value"];
+            bool found = tree->search(value);
+            
+            bool treeModified = (tree->getType() == "splay");
+            
+            res.set_content(json{
+                {"found", found},
+                {"treeModified", treeModified}
+            }.dump(), "application/json");
+        }
+        catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
     
     server.Get("/trees", [&](const httplib::Request& req, httplib::Response& res) {
         json treesList = treeManager.listTrees();

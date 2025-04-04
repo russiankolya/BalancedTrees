@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const insertBtn = document.getElementById('insert-btn');
     const removeBtn = document.getElementById('remove-btn');
     const deleteTreeBtn = document.getElementById('delete-tree-btn');
+    const searchBtn = document.getElementById('search-btn');
     const treeVisualization = document.getElementById('tree-visualization');
     
     let selectedTreeId = null;
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
     createTreeBtn.addEventListener('click', createTree);
     insertBtn.addEventListener('click', insertNode);
     removeBtn.addEventListener('click', removeNode);
+    searchBtn.addEventListener('click', searchNode);
     deleteTreeBtn.addEventListener('click', deleteTree);
     
     function loadTrees() {
@@ -74,11 +76,22 @@ document.addEventListener('DOMContentLoaded', function() {
         fetchTreeData(treeId);
     }
     
-    function fetchTreeData(treeId) {
+    function fetchTreeData(treeId, searchValue = null) {
         fetch(`/trees/${treeId}`)
             .then(response => response.json())
             .then(treeData => {
-                visualizeTree(treeData);
+                // Store the tree type for visualization
+                const treeItems = document.querySelectorAll('.tree-item');
+                treeItems.forEach(item => {
+                    if (item.dataset.id === treeId) {
+                        const typeMatch = item.textContent.match(/^([a-z_]+)/);
+                        if (typeMatch) {
+                            treeData.type = typeMatch[1];
+                        }
+                    }
+                });
+                
+                visualizeTree(treeData, searchValue);
             })
             .catch(error => {
                 console.error('Error fetching tree data:', error);
@@ -139,6 +152,54 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => console.error('Error removing node:', error));
     }
+
+    function searchNode() {
+        if (!selectedTreeId) {
+            alert('Please select a tree first');
+            return;
+        }
+        
+        const value = parseInt(nodeValueInput.value);
+        if (isNaN(value)) {
+            alert('Please enter a valid number');
+            return;
+        }
+        
+        fetch(`/trees/${selectedTreeId}/search`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ value: value })
+        })
+        .then(response => response.json())
+        .then(result => {
+            fetchTreeData(selectedTreeId, value);
+            
+            const resultMessage = document.createElement('div');
+            resultMessage.className = 'search-result';
+            
+            if (result.found) {
+                resultMessage.classList.add('search-found');
+                resultMessage.textContent = `Found ${value} in the tree!`;
+                
+                if (result.treeModified) {
+                    resultMessage.textContent += ' (Tree structure updated)';
+                }
+            } else {
+                resultMessage.classList.add('search-not-found');
+                resultMessage.textContent = `Value ${value} not found in the tree.`;
+            }
+            
+            const existingMessage = document.querySelector('.search-result');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+            
+            document.getElementById('active-tree-panel').appendChild(resultMessage);
+        })
+        .catch(error => console.error('Error searching node:', error));
+    }
     
     function deleteTree() {
         if (!selectedTreeId) {
@@ -161,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function visualizeTree(treeData) {
+    function visualizeTree(treeData, searchValue = null) {
         treeVisualization.innerHTML = '';
         
         if (!treeData || !treeData.nodes || treeData.nodes.length === 0) {
@@ -173,19 +234,33 @@ document.addEventListener('DOMContentLoaded', function() {
         treeContainer.className = 'tree-container';
         
         const nodes = treeData.nodes;
+        const treeType = treeData.type;
         
-        const treeRoot = buildTreeNode(0, nodes);
+        const treeRoot = buildTreeNode(0, nodes, treeType, searchValue);
         treeContainer.appendChild(treeRoot);
         treeVisualization.appendChild(treeContainer);
     }
     
-    function buildTreeNode(nodeIndex, nodes) {
+    function buildTreeNode(nodeIndex, nodes, treeType, searchValue = null) {
         const node = nodes[nodeIndex];
         const nodeElement = document.createElement('div');
         nodeElement.className = 'tree-node';
         
         const valueElement = document.createElement('div');
         valueElement.className = 'node-value';
+        
+        if (treeType === 'red_black' && node.color !== undefined) {
+            if (node.color === 'RED' || node.color === 'red' || node.color === 0) {
+                valueElement.classList.add('red-node');
+            } else {
+                valueElement.classList.add('black-node');
+            }
+        }
+        
+        if (searchValue !== null && node.key === searchValue) {
+            valueElement.classList.add('highlight');
+        }
+        
         valueElement.textContent = node.key;
         nodeElement.appendChild(valueElement);
         
@@ -203,12 +278,12 @@ document.addEventListener('DOMContentLoaded', function() {
             rightSide.className = 'child-branch right-branch';
             
             if (hasLeftChild) {
-                const leftChildNode = buildTreeNode(node.left, nodes);
+                const leftChildNode = buildTreeNode(node.left, nodes, treeType, searchValue);
                 leftSide.appendChild(leftChildNode);
             }
             
             if (hasRightChild) {
-                const rightChildNode = buildTreeNode(node.right, nodes);
+                const rightChildNode = buildTreeNode(node.right, nodes, treeType, searchValue);
                 rightSide.appendChild(rightChildNode);
             }
             

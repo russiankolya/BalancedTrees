@@ -1,10 +1,8 @@
 #pragma once
 
-#include "tree_visitor.h"
 #include "binary_search_tree.h"
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 template <typename T>
 class ScapegoatTree final : public BinarySearchTree<T> {
@@ -12,12 +10,11 @@ public:
     struct Node {
         T key;
         Node *left, *right;
-        size_t size;
 
-        explicit Node(const T& key) : key(key), left(nullptr), right(nullptr), size(1) {}
+        explicit Node(const T& key) : key(key), left(nullptr), right(nullptr) {}
     };
 
-    ScapegoatTree() : root_(nullptr), size_(0), max_size_(0) {}
+    ScapegoatTree(double alpha = 0.7) : root_(nullptr), size_(0), max_size_(0), alpha_(alpha) {}
     
     ~ScapegoatTree() {
         destroyTree(root_);
@@ -45,59 +42,46 @@ public:
             return;
         }
 
-        size_t depth = 0;
-        bool inserted = false;
+        Node* current = root_;
+        Node* parent = nullptr;
         std::vector<Node*> path;
         
-        root_ = insertUtility(root_, value, depth, path, inserted);
+        while (current != nullptr) {
+            path.push_back(current);
+            parent = current;
+            if (value < current->key) {
+                current = current->left;
+            } else {
+                current = current->right;
+            }
+        }
         
-        if (inserted) {
-            size_++;
-            max_size_ = std::max(max_size_, size_);
-            
-            double height_limit = std::log(size_) / std::log(1.0 / alpha);
-            if (depth > static_cast<size_t>(height_limit)) {
-                Node* scapegoat = nullptr;
-                Node* scapegoat_parent = nullptr;
-                
-                for (size_t i = 0; i < path.size() - 1; i++) {
-                    Node* child = path[i+1];
-                    Node* parent = path[i];
-                    
-                    if (child->size > alpha * parent->size) {
-                        scapegoat = child;
-                        scapegoat_parent = parent;
-                        break;
-                    }
-                }
-                
-                if (scapegoat == nullptr) {
-                    root_ = rebuildSubtree(root_);
-                } else {
-                    if (scapegoat_parent->left == scapegoat) {
-                        scapegoat_parent->left = rebuildSubtree(scapegoat);
-                    } else {
-                        scapegoat_parent->right = rebuildSubtree(scapegoat);
-                    }
-                    
-                    for (int i = path.size() - 2; i >= 0; i--) {
-                        updateSize(path[i]);
-                    }
-                }
+        Node* new_node = new Node(value);
+        if (value < parent->key) {
+            parent->left = new_node;
+        } else {
+            parent->right = new_node;
+        }
+        
+        size_++;
+        max_size_ = std::max(max_size_, size_);
+        
+        if (height(path.size()) > log_alpha(size_)) {
+            Node* scapegoat = findScapegoat(path);
+            if (scapegoat != nullptr) {
+                rebuildSubtree(scapegoat, path);
             }
         }
     }
     
     void remove(const T &value) override {
-        bool removed = false;
-        root_ = removeUtility(root_, value, removed);
+        root_ = removeNode(root_, value);
         
-        if (removed) {
-            size_--;
-            if (size_ < alpha * max_size_) {
-                root_ = rebuildSubtree(root_);
-                max_size_ = size_;
+        if (size_ < alpha_ * max_size_) {
+            if (root_ != nullptr) {
+                root_ = rebuildEntireTree();
             }
+            max_size_ = size_;
         }
     }
 
@@ -114,106 +98,125 @@ public:
     }
 
 private:
-    Node* root_ = nullptr;
+    Node* root_;
     size_t size_;
     size_t max_size_;
-    static constexpr double alpha = 2.0 / 3.0;
+    double alpha_;
 
-    size_t getSize(Node* node) const {
-        return node ? node->size : 0;
+    size_t subtreeSize(Node* node) const {
+        if (node == nullptr) return 0;
+        return 1 + subtreeSize(node->left) + subtreeSize(node->right);
     }
 
-    void updateSize(Node* node) {
-        if (node) {
-            node->size = 1 + getSize(node->left) + getSize(node->right);
+    double log_alpha(double n) const {
+        return std::log(n) / std::log(1.0 / alpha_);
+    }
+
+    size_t height(size_t path_length) const {
+        return path_length;
+    }
+
+    Node* findScapegoat(const std::vector<Node*>& path) {
+        size_t depth = path.size() - 1;
+        for (int i = depth - 1; i >= 0; i--) {
+            Node* current = path[i];
+            size_t size = subtreeSize(current);
+            size_t child_size = subtreeSize(path[i+1]);
+            
+            if (child_size > alpha_ * size) {
+                return current;
+            }
         }
+        return root_;
     }
 
-    Node* rebuildSubtree(Node* root) {
-        std::vector<Node*> nodes;
-        nodes.reserve(getSize(root));
-        
-        flattenTree(root, nodes);
-        
-        return buildBalancedTree(nodes, 0, nodes.size() - 1);
+    Node* flattenTree(Node* root, Node* tail) {
+        if (root == nullptr) {
+            return tail;
+        }
+        root->right = flattenTree(root->right, tail);
+        return flattenTree(root->left, root);
     }
 
-    void flattenTree(Node* root, std::vector<Node*>& nodes) {
-        if (!root) return;
+    Node* buildBalancedFromLinkedList(Node*& head, size_t size) {
+        if (size == 0) return nullptr;
         
-        flattenTree(root->left, nodes);
-        nodes.push_back(root);
-        flattenTree(root->right, nodes);
-    }
-
-    Node* buildBalancedTree(std::vector<Node*>& nodes, int start, int end) {
-        if (start > end) return nullptr;
+        size_t leftSize = size / 2;
+        Node* leftSubtree = buildBalancedFromLinkedList(head, leftSize);
         
-        int mid = start + (end - start) / 2;
-        Node* root = nodes[mid];
+        Node* root = head;
+        head = head->right;
         
-        root->left = buildBalancedTree(nodes, start, mid - 1);
-        root->right = buildBalancedTree(nodes, mid + 1, end);
+        root->left = leftSubtree;
         
-        updateSize(root);
+        root->right = buildBalancedFromLinkedList(head, size - leftSize - 1);
         
         return root;
     }
 
-    Node* insertUtility(Node* current, const T& value, size_t& depth, std::vector<Node*>& path, bool& inserted) {
-        if (current == nullptr) {
-            inserted = true;
-            return new Node(value);
-        }
+    void rebuildSubtree(Node* scapegoat, const std::vector<Node*>& path) {
+        Node* parent = nullptr;
+        bool is_left_child = false;
         
-        path.push_back(current);
-        depth++;
-        
-        if (value < current->key) {
-            current->left = insertUtility(current->left, value, depth, path, inserted);
-        } else if (value > current->key) {
-            current->right = insertUtility(current->right, value, depth, path, inserted);
-        }
-        
-        if (inserted) {
-            current->size++;
-        }
-        
-        return current;
-    }
-
-    Node* removeUtility(Node* current, const T& value, bool& removed) {
-        if (current == nullptr) return nullptr;
-        
-        if (value < current->key) {
-            current->left = removeUtility(current->left, value, removed);
-        } else if (value > current->key) {
-            current->right = removeUtility(current->right, value, removed);
-        } else {
-            removed = true;
-            
-            if (current->left == nullptr) {
-                Node* temp = current->right;
-                delete current;
-                return temp;
-            } else if (current->right == nullptr) {
-                Node* temp = current->left;
-                delete current;
-                return temp;
-            } else {
-                Node* successor = current->right;
-                while (successor->left) successor = successor->left;
-                
-                current->key = successor->key;
-                current->right = removeUtility(current->right, successor->key, removed);
+        for (size_t i = 0; i < path.size(); i++) {
+            if (path[i] == scapegoat && i > 0) {
+                parent = path[i-1];
+                is_left_child = (parent->left == scapegoat);
+                break;
             }
         }
         
-        if (removed) {
-            current->size--;
+        size_t subtree_size = subtreeSize(scapegoat);
+        
+        Node* list_head = flattenTree(scapegoat, nullptr);
+        
+        Node* new_subtree_root = buildBalancedFromLinkedList(list_head, subtree_size);
+        
+        if (parent == nullptr) {
+            root_ = new_subtree_root;
+        } else if (is_left_child) {
+            parent->left = new_subtree_root;
+        } else {
+            parent->right = new_subtree_root;
+        }
+    }
+
+    Node* rebuildEntireTree() {
+        size_t tree_size = size_;
+        Node* list_head = flattenTree(root_, nullptr);
+        return buildBalancedFromLinkedList(list_head, tree_size);
+    }
+
+    Node* removeNode(Node* node, const T& value) {
+        if (node == nullptr) return nullptr;
+        
+        if (value < node->key) {
+            node->left = removeNode(node->left, value);
+        } else if (value > node->key) {
+            node->right = removeNode(node->right, value);
+        } else {            
+            if (node->left == nullptr) {
+                Node* temp = node->right;
+                delete node;
+                size_--;
+                return temp;
+            } else if (node->right == nullptr) {
+                Node* temp = node->left;
+                delete node;
+                size_--;
+                return temp;
+            }
+            
+            Node* temp = node->right;
+            while (temp->left != nullptr) {
+                temp = temp->left;
+            }
+            
+            node->key = temp->key;
+            node->right = removeNode(node->right, temp->key);
         }
         
-        return current;
+        return node;
     }
 
     void destroyTree(Node* node) {

@@ -65,6 +65,46 @@ h2 {
   margin-bottom: 5px;
 }
 
+.button-row {
+  display: flex;
+  gap: 5px;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+.node-value.highlight {
+  background-color: #FF9800;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 152, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
+}
+
+.search-result {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.search-found {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.search-not-found {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
 button, input, select {
   width: 100%;
   padding: 8px;
@@ -206,4 +246,43 @@ input, select {
   left: 0;
   border-right: 2px solid #999;
   border-top-right-radius: 8px;
+}
+
+.red-node {
+    background-color: #e53935;  /* Red color */
+    color: white;
+}
+
+.black-node {
+    background-color: #212121;  /* Black color */
+    color: white;
+}
+
+/* Optional: Add a legend for Red-Black trees */
+.rb-legend {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+    font-size: 0.9rem;
+}
+
+.rb-legend-item {
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+}
+
+.rb-legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.rb-legend-red {
+    background-color: #e53935;
+}
+
+.rb-legend-black {
+    background-color: #212121;
 }
