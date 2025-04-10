@@ -4,6 +4,7 @@
 #include <chrono>
 #include <random>
 #include <algorithm>
+#include <functional>
 
 #include "trees/avl_tree.hpp"
 #include "trees/bb_alpha_tree.hpp"
