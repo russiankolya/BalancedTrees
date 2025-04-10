@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/trees/${treeId}`)
             .then(response => response.json())
             .then(treeData => {
-                // Store the tree type for visualization
                 const treeItems = document.querySelectorAll('.tree-item');
                 treeItems.forEach(item => {
                     if (item.dataset.id === treeId) {

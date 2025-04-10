@@ -16,7 +16,7 @@ public:
         explicit Node(const T& key) : key(key), left(nullptr), right(nullptr), size(1) {}
     };
 
-    BBAlphaTree() : root_(nullptr) {}
+    BBAlphaTree(double alpha = 0.25) : root_(nullptr), alpha_(alpha) {}
     
     ~BBAlphaTree() {
         destroyTree(root_);
@@ -62,7 +62,7 @@ public:
 
 private:
     Node* root_ = nullptr;
-    static constexpr double alpha = 0.25;
+    double alpha_;
 
     size_t getSize(Node* node) const {
         if (node == nullptr) {
@@ -87,11 +87,11 @@ private:
         size_t rightSize = getSize(node->right);
         size_t totalSize = leftSize + rightSize + 1;
         
-        if (leftSize < alpha * totalSize || leftSize > (1 - alpha) * totalSize) {
+        if (leftSize < alpha_ * totalSize || leftSize > (1 - alpha_) * totalSize) {
             return false;
         }
         
-        if (rightSize < alpha * totalSize || rightSize > (1 - alpha) * totalSize) {
+        if (rightSize < alpha_ * totalSize || rightSize > (1 - alpha_) * totalSize) {
             return false;
         }
         

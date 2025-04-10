@@ -14,7 +14,7 @@ public:
         explicit Node(const T& key) : key(key), left(nullptr), right(nullptr) {}
     };
 
-    ScapegoatTree(double alpha = 0.7) : root_(nullptr), size_(0), max_size_(0), alpha_(alpha) {}
+    ScapegoatTree(double alpha = 0.6) : root_(nullptr), size_(0), max_size_(0), alpha_(alpha) {}
     
     ~ScapegoatTree() {
         destroyTree(root_);

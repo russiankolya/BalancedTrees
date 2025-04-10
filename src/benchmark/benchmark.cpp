@@ -22,12 +22,11 @@ struct Operation {
     EType type;
 };
 
-template<template<typename> class TTreeType>
-uint64_t measureOperationsTime(const std::vector<int>& preliminaryValues, const std::vector<Operation>& operations) {
-    TTreeType<int> tree;
+uint64_t measureOperationsTime(const std::vector<int>& preliminaryValues, const std::vector<Operation>& operations, std::function<BinarySearchTree<int>*()> treeCreator) {
+    std::unique_ptr<BinarySearchTree<int>> tree(treeCreator());
 
     for (const auto value : preliminaryValues) {
-        tree.insert(value);
+        tree->insert(value);
     }
     
     auto start = std::chrono::high_resolution_clock::now();
@@ -37,13 +36,13 @@ uint64_t measureOperationsTime(const std::vector<int>& preliminaryValues, const 
         
         switch (type) {
             case EType::INSERT:
-                tree.insert(value);
+                tree->insert(value);
                 break;
             case EType::REMOVE:
-                tree.remove(value);
+                tree->remove(value);
                 break;
             case EType::SEARCH:
-                volatile bool found = tree.search(op.value);
+                volatile bool found = tree->search(op.value);
                 (void)found;
                 break;
         }
@@ -55,11 +54,47 @@ uint64_t measureOperationsTime(const std::vector<int>& preliminaryValues, const 
 }
 
 void runOperations(const std::vector<int>& preliminaryValues, const std::vector<Operation>& operations) {
-    std::cout << "AVL Tree: " << measureOperationsTime<AVLTree>(preliminaryValues, operations) << "\n";
-    std::cout << "BB-alpha Tree: " << measureOperationsTime<BBAlphaTree>(preliminaryValues, operations) << "\n";
-    std::cout << "Red Black Tree: " << measureOperationsTime<RedBlackTree>(preliminaryValues, operations) << "\n";
-    std::cout << "Scapegoat Tree: " << measureOperationsTime<ScapegoatTree>(preliminaryValues, operations) << "\n";
-    std::cout << "Splay Tree: " << measureOperationsTime<SplayTree>(preliminaryValues, operations) << "\n\n";
+    std::cout << "AVL Tree: " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new AVLTree<int>(); }
+                 ) << " ms\n";
+    
+    std::cout << "BB-alpha Tree (alpha=0.25): " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new BBAlphaTree<int>(0.25); }
+                 ) << " ms\n";
+                 
+    std::cout << "BB-alpha Tree (alpha=0.33): " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new BBAlphaTree<int>(0.33); }
+                 ) << " ms\n";
+    
+    std::cout << "Red Black Tree: " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new RedBlackTree<int>(); }
+                 ) << " ms\n";
+    
+    std::cout << "Scapegoat Tree (alpha=0.5): " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new ScapegoatTree<int>(0.5); }
+                 ) << " ms\n";
+                 
+    std::cout << "Scapegoat Tree (alpha=0.7): " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new ScapegoatTree<int>(0.7); }
+                 ) << " ms\n";
+    
+    std::cout << "Splay Tree: " 
+              << measureOperationsTime(
+                   preliminaryValues, operations, 
+                   []() { return new SplayTree<int>(); }
+                 ) << " ms\n\n";
 }
 
 int main() {
@@ -204,7 +239,6 @@ int main() {
         std::cout << "Mixed operations with uniform distribution:\n";
         runOperations(preliminaryValues, operations);
     }
-    
 
     return 0;
 }
