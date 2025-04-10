@@ -158,19 +158,19 @@ int main() {
 
         std::vector<int> preliminaryValues(data.begin(), data.begin() + N);
         
-        const int HOT_KEYS_COUNT = 0.01 * N;
+        const int HOT_KEYS_COUNT = 0.1 * N;
         std::vector<int> hotKeys(preliminaryValues.begin(), preliminaryValues.begin() + HOT_KEYS_COUNT);
         
         std::vector<Operation> operations;
         
         std::uniform_int_distribution<int> hotKeysDis(0, HOT_KEYS_COUNT - 1);
-        for (int i = 0; i < Q * 0.99; i++) {
+        for (int i = 0; i < Q * 0.9; i++) {
             int hotKeyIndex = hotKeysDis(gen);
             operations.push_back({hotKeys[hotKeyIndex], SEARCH});
         }
         
         std::uniform_int_distribution<int> anyKeyDis(1, 2 * N);
-        for (int i = 0; i < Q * 0.01; i++) {
+        for (int i = 0; i < Q * 0.1; i++) {
             operations.push_back({anyKeyDis(gen), SEARCH});
         }
         
